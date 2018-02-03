@@ -43,6 +43,12 @@ public class AddressBook {
     private static final String DEFAULT_STORAGE_FILEPATH = "addressbook.txt";
 
     /**
+     * Default file path to user log in information.
+     */
+
+    private static final String DEFAULT_USERINFO_FILEPATH = "userinfobook.txt";
+
+    /**
      * Version info of the program.
      */
     private static final String VERSION = "AddessBook Level 1 - Version 1.0";
@@ -147,6 +153,9 @@ public class AddressBook {
     private static final String PERSON_PROPERTY_PHONE = "phone";
     private static final String PERSON_PROPERTY_EMAIL = "email";
 
+    private static final String USER_PROPERTY_ID = "ID";
+    private static final String USER_PROPERTY_PASSWORD = "PASSWORD";
+
     /**
      * Offset required to convert between 1-indexing and 0-indexing.COMMAND_
      */
@@ -179,6 +188,7 @@ public class AddressBook {
      * List of all persons in the address book.
      */
     private static final ArrayList<HashMap<String,String>> ALL_PERSONS = new ArrayList<>();
+    private static final ArrayList<HashMap<String,String>> ALL_USERS = new ArrayList<>();
 
     /**
      * Stores the most recent list of persons shown to the user as a result of a user command.
@@ -191,6 +201,7 @@ public class AddressBook {
      * The path to the file used for storing person data.
      */
     private static String storageFilePath;
+    private static final HashMap<String,String> admin = new HashMap<>();
 
     /*
      * NOTE : =============================================================
@@ -206,6 +217,16 @@ public class AddressBook {
     public static void main(String[] args) {
         showWelcomeMessage();
         processProgramArgs(args);
+        loadUserInfoFromStorage();
+        getAllUsers();
+        showLogInMessage();
+        boolean log_in = false;
+        while (!log_in) {
+            String userLogin = getUserLogin();
+            log_in = checkUserLogin(userLogin);
+            if (!log_in) showFailedLogIn();
+
+        }
         loadDataFromStorage();
         while (true) {
             String userCommand = getUserInput();
@@ -213,6 +234,10 @@ public class AddressBook {
             String feedback = executeCommand(userCommand);
             showResultToUser(feedback);
         }
+    }
+
+    private static void showFailedLogIn() {
+        System.out.println("Wrong ID or Password\n");
     }
 
     /*
@@ -226,6 +251,10 @@ public class AddressBook {
     private static void showWelcomeMessage() {
         String[] multiShow = {DIVIDER, DIVIDER, VERSION, MESSAGE_WELCOME, DIVIDER};
         showToUser(multiShow);
+    }
+
+    private static void showLogInMessage() {
+        System.out.println("Login please\n");
     }
 
     private static void showResultToUser(String result) {
@@ -351,6 +380,12 @@ public class AddressBook {
         initialiseAddressBookModel(loadPersonsFromFile(storageFilePath));
     }
 
+    private static void loadUserInfoFromStorage() {
+        initialiseUsersList(loadUsersFromFile(DEFAULT_USERINFO_FILEPATH));
+    }
+
+
+
 
     /*
      * ===========================================
@@ -456,6 +491,16 @@ public class AddressBook {
         return getMessageForPersonsDisplayedSummary(personsFound);
     }
 
+    private static boolean checkUserLogin(String userLogin) {
+        String ID = extractIDFromUserString(userLogin);
+        String Password = extractPasswordFromUserString(userLogin);
+        final HashMap<String,String> usersFound = getsUser(ID);
+        if (usersFound == admin) return false;
+        if (!usersFound.get(USER_PROPERTY_PASSWORD).equals(Password)) return false;
+        return true;
+    }
+
+
     /**
      * Constructs a feedback message to summarise an operation that displayed a listing of persons.
      *
@@ -491,6 +536,15 @@ public class AddressBook {
             }
         }
         return matchedPersons;
+    }
+
+    private static HashMap<String,String> getsUser(String ID) {
+        for (HashMap<String,String> user : getAllUsers()) {
+            if (getIDFromUser(user).equals(ID)) {
+                return user;
+            }
+        }
+        return admin;
     }
 
     /**
@@ -600,6 +654,16 @@ public class AddressBook {
      */
     private static String getUserInput() {
         System.out.print(LINE_PREFIX + "Enter command: ");
+        String inputLine = SCANNER.nextLine();
+        // silently consume all blank and comment lines
+        while (inputLine.trim().isEmpty() || inputLine.trim().charAt(0) == INPUT_COMMENT_MARKER) {
+            inputLine = SCANNER.nextLine();
+        }
+        return inputLine;
+    }
+
+    private static String getUserLogin() {
+        System.out.print(LINE_PREFIX + "Enter ID and Password: ");
         String inputLine = SCANNER.nextLine();
         // silently consume all blank and comment lines
         while (inputLine.trim().isEmpty() || inputLine.trim().charAt(0) == INPUT_COMMENT_MARKER) {
@@ -743,6 +807,17 @@ public class AddressBook {
         return successfullyDecoded.get();
     }
 
+    private static ArrayList<HashMap<String,String>> loadUsersFromFile(String filePath) {
+        final Optional<ArrayList<HashMap<String,String>>> successfullyDecoded = decodeUsersFromStrings(getLinesInFile(filePath));
+        if (!successfullyDecoded.isPresent()) {
+            showToUser(MESSAGE_INVALID_STORAGE_FILE_CONTENT);
+            exitProgram();
+        }
+        return successfullyDecoded.get();
+    }
+
+
+
     /**
      * Gets all lines in the specified file as a list of strings. Line separators are removed.
      * Shows error messages and exits program if unable to read from file.
@@ -814,6 +889,10 @@ public class AddressBook {
         return ALL_PERSONS;
     }
 
+    private static ArrayList<HashMap<String,String>> getAllUsers() {
+        return ALL_USERS;
+    }
+
     /**
      * Clears all persons in the address book and saves changes to file.
      */
@@ -832,6 +911,11 @@ public class AddressBook {
         ALL_PERSONS.addAll(persons);
     }
 
+    private static void initialiseUsersList(ArrayList<HashMap<String,String>> users) {
+        ALL_USERS.clear();
+        ALL_USERS.addAll(users);
+    }
+
 
     /*
      * ===========================================
@@ -848,6 +932,9 @@ public class AddressBook {
         return person.get(PERSON_PROPERTY_NAME);
     }
 
+    private static String getIDFromUser(HashMap<String,String> user) {
+        return user.get(USER_PROPERTY_ID);
+    }
     /**
      * Returns given person's phone number
      *
@@ -880,6 +967,13 @@ public class AddressBook {
         person.put(PERSON_PROPERTY_PHONE, phone);
         person.put(PERSON_PROPERTY_EMAIL, email);
         return person;
+    }
+
+    private static HashMap<String,String> makeUserFromData(String ID, String password) {
+        final HashMap<String, String> user = new HashMap<>();
+        user.put(USER_PROPERTY_ID, ID);
+        user.put(USER_PROPERTY_PASSWORD, password);
+        return user;
     }
 
     /**
@@ -937,6 +1031,18 @@ public class AddressBook {
         return isPersonDataValid(decodedPerson) ? Optional.of(decodedPerson) : Optional.empty();
     }
 
+    private static Optional<HashMap<String,String>> decodeUserFromString(String encoded) {
+        // check that we can extract the parts of a person from the encoded string
+
+        final HashMap<String,String> decodedUser = makeUserFromData(
+                extractIDFromUserString(encoded),
+                extractPasswordFromUserString(encoded)
+        );
+
+        // check that the constructed person is valid
+        return Optional.of(decodedUser);
+    }
+
     /**
      * Decodes persons from a list of string representations.
      *
@@ -954,6 +1060,18 @@ public class AddressBook {
             decodedPersons.add(decodedPerson.get());
         }
         return Optional.of(decodedPersons);
+    }
+
+    private static Optional<ArrayList<HashMap<String,String>>> decodeUsersFromStrings(ArrayList<String> encodedUsers) {
+        final ArrayList<HashMap<String,String>> decodedUsers = new ArrayList<>();
+        for (String encodedUser : encodedUsers) {
+            final Optional<HashMap<String,String>> decodedUser = decodeUserFromString(encodedUser);
+            if (!decodedUser.isPresent()) {
+                return Optional.empty();
+            }
+            decodedUsers.add(decodedUser.get());
+        }
+        return Optional.of(decodedUsers);
     }
 
     /**
@@ -1030,6 +1148,17 @@ public class AddressBook {
                     PERSON_DATA_PREFIX_EMAIL);
         }
     }
+
+    private static String extractIDFromUserString(String encoded) {
+        final String[] commandTypeAndParams = splitCommandWordAndArgs(encoded);
+        return commandTypeAndParams[0];
+    }
+
+    private static String extractPasswordFromUserString(String encoded) {
+        final String[] commandTypeAndParams = splitCommandWordAndArgs(encoded);
+        return commandTypeAndParams[1];
+    }
+
 
     /**
      * Returns true if the given person's data fields are valid
